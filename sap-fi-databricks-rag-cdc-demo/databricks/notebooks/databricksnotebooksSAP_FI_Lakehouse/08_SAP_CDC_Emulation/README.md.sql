@@ -1,0 +1,13 @@
+-- Databricks notebook source
+-- MAGIC %md
+-- MAGIC # 08 – SAP CDC Emulation (SLT & ODP)
+-- MAGIC
+-- MAGIC This module simulates SAP SLT and ODP/ODQ style change data capture for FI
+-- MAGIC line items using Databricks and Delta tables.
+-- MAGIC
+-- MAGIC - `01_SLT_Emulation/` – simulates row-based replication events
+-- MAGIC   (I/U/D) for FI line items into an "events" table.
+-- MAGIC
+-- MAGIC - `02_ODP_Queue_Emulation/` – simulates an ODP-style delta queue
+-- MAGIC   and a consumer that applies deltas into a Bronze CDC table.
+-- MAGIC

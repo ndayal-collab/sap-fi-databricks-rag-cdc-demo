@@ -1,0 +1,90 @@
+-- Databricks notebook source
+-- MAGIC %md
+-- MAGIC # 01_RAG_QA_Interface
+-- MAGIC
+-- MAGIC Interactive interface for the SAP → Databricks documentation RAG.
+-- MAGIC
+-- MAGIC What this does:
+-- MAGIC - Lets you type a natural language question
+-- MAGIC - Lets you pick a topic (architecture, data_vault, data_quality, sap_integration, all)
+-- MAGIC - Searches the documentation corpus (`sap_ai.doc_rag_embeddings`)
+-- MAGIC - Returns the most relevant text chunks as RAG context
+-- MAGIC
+-- MAGIC This is retrieval-only (no LLM call yet) but is enough to:
+-- MAGIC - Explore the RAG content interactively
+-- MAGIC - Show how RAG would ground LLM answers in this project
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC # Databricks widgets for simple UI
+-- MAGIC dbutils.widgets.text("question", "Explain our SAP to Databricks architecture", "Question")
+-- MAGIC dbutils.widgets.dropdown(
+-- MAGIC     "topic",
+-- MAGIC     "architecture",
+-- MAGIC     ["architecture", "data_vault", "data_quality", "sap_integration", "all"],
+-- MAGIC     "Topic"
+-- MAGIC )
+-- MAGIC dbutils.widgets.text("max_results", "5", "Max Results")
+-- MAGIC
+-- MAGIC question = dbutils.widgets.get("question").strip()
+-- MAGIC topic = dbutils.widgets.get("topic")
+-- MAGIC max_results = int(dbutils.widgets.get("max_results"))
+-- MAGIC
+-- MAGIC print("Question:", question)
+-- MAGIC print("Topic filter:", topic)
+-- MAGIC print("Max results:", max_results)
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC from pyspark.sql import functions as F
+-- MAGIC
+-- MAGIC spark.sql("USE CATALOG lending_catalog")
+-- MAGIC spark.sql("USE SCHEMA sap_ai")
+-- MAGIC
+-- MAGIC base_df = spark.table("doc_rag_embeddings")
+-- MAGIC
+-- MAGIC # Apply topic filter if not "all"
+-- MAGIC if topic != "all":
+-- MAGIC     base_df = base_df.filter(F.col("topic") == topic)
+-- MAGIC
+-- MAGIC # If no question, just show everything (limited)
+-- MAGIC if not question:
+-- MAGIC     results_df = (base_df
+-- MAGIC                   .orderBy("doc_id", "chunk_index")
+-- MAGIC                   .limit(max_results))
+-- MAGIC else:
+-- MAGIC     # Basic lexical scoring: count how many tokens appear in the text
+-- MAGIC     tokens = [t.lower() for t in question.split() if t.strip()]
+-- MAGIC     df = base_df
+-- MAGIC
+-- MAGIC     # Build a simple score: +1 for each token that appears (ILIKE)
+-- MAGIC     score_expr = F.lit(0)
+-- MAGIC     for t in tokens:
+-- MAGIC         score_expr = score_expr + F.when(F.lower(F.col("text")).contains(t), F.lit(1)).otherwise(F.lit(0))
+-- MAGIC
+-- MAGIC     df = df.withColumn("score", score_expr)
+-- MAGIC
+-- MAGIC     results_df = (df
+-- MAGIC                   .filter(F.col("score") > 0)
+-- MAGIC                   .orderBy(F.col("score").desc(), F.col("doc_id"), F.col("chunk_index"))
+-- MAGIC                   .limit(max_results))
+-- MAGIC
+-- MAGIC display(results_df.select("doc_id", "topic", "subtopic", "chunk_index", "score", "text"))
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC rows = results_df.orderBy("doc_id", "chunk_index").select("text").limit(max_results).toPandas()
+-- MAGIC
+-- MAGIC if len(rows) == 0:
+-- MAGIC     print("No matching documentation chunks found.")
+-- MAGIC else:
+-- MAGIC     context = "\n\n".join(rows["text"].tolist())
+-- MAGIC     print("---- RAG CONTEXT (for LLM or human) ----\n")
+-- MAGIC     print(context)
+-- MAGIC

@@ -1,0 +1,133 @@
+-- Databricks notebook source
+-- MAGIC %md
+-- MAGIC # 01_RAG_System_Architecture
+-- MAGIC
+-- MAGIC This notebook describes how the RAG system is layered on top of the
+-- MAGIC SAP → Databricks Lakehouse and how it will answer questions about:
+-- MAGIC
+-- MAGIC - Overall architecture
+-- MAGIC - Data Vault → Silver → Gold lineage
+-- MAGIC - Data quality strategy
+-- MAGIC - Raw SAP vs BDC + Delta Sharing
+-- MAGIC
+-- MAGIC The focus here is *documentation RAG* (architecture brain), not ML models.
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ## RAG Layers
+-- MAGIC
+-- MAGIC The RAG design for this POC has four main layers:
+-- MAGIC
+-- MAGIC 1. **Document Corpus (what)**
+-- MAGIC    - Table: `lending_catalog.sap_ai.doc_rag_corpus`
+-- MAGIC    - Holds curated text chunks about architecture, DV lineage, data quality,
+-- MAGIC      Delta logs, and SAP integration patterns.
+-- MAGIC
+-- MAGIC 2. **Embeddings (how we index)**
+-- MAGIC    - Table: `lending_catalog.sap_ai.doc_rag_embeddings`
+-- MAGIC    - Same rows as the corpus, plus an `embedding` column (array<double>).
+-- MAGIC    - In free Databricks, this column is initially null or filled with dummy
+-- MAGIC      vectors; in a full environment it is populated using an embedding model.
+-- MAGIC
+-- MAGIC 3. **Retrieval (how we search)**
+-- MAGIC    - Notebook: `07_RAG/03_Vector_Search/01_RAG_Hybrid_Search.py`
+-- MAGIC    - Uses:
+-- MAGIC      - Lexical search today (`ILIKE` on `text`)
+-- MAGIC      - Future vector search on `embedding` (Databricks Vector Search or custom cosine similarity)
+-- MAGIC    - Filters by `topic` and `subtopic` to focus on architecture, data_vault, data_quality, or sap_integration.
+-- MAGIC
+-- MAGIC 4. **Orchestration (how an LLM uses it)**
+-- MAGIC    - External LLM (e.g., Azure OpenAI, OpenAI, or Databricks Model Serving)
+-- MAGIC    - The orchestrator:
+-- MAGIC      1. Receives a question
+-- MAGIC      2. Chooses a topic / subtopic (or uses all)
+-- MAGIC      3. Retrieves top-k chunks from `doc_rag_embeddings`
+-- MAGIC      4. Passes question + chunks to the LLM as context
+-- MAGIC      5. Returns a grounded answer with references.
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ## Example RAG Question Flows
+-- MAGIC
+-- MAGIC ### 1. Architecture question
+-- MAGIC
+-- MAGIC **Question:**  
+-- MAGIC “Explain how your SAP → Databricks architecture works.”
+-- MAGIC
+-- MAGIC **Retrieval:**
+-- MAGIC - Filter `topic = 'architecture'`
+-- MAGIC - Search text for: 'SAP', 'Databricks', 'Medallion', 'Delta'
+-- MAGIC - Return chunks:
+-- MAGIC   - `ARCH_OVERVIEW_001` (sap_to_databricks)
+-- MAGIC   - `DELTA_SNAPSHOTS_001` (delta_logs)
+-- MAGIC   - `BDC_COMPARISON_001` (bdc_vs_raw)
+-- MAGIC
+-- MAGIC **LLM Answer:**
+-- MAGIC - Explains the POC Lakehouse (Landing → Bronze → DV → Silver → Gold)
+-- MAGIC - Describes Delta snapshots and time travel
+-- MAGIC - Compares raw SAP ingestion with BDC/Delta Sharing
+-- MAGIC - All grounded in the retrieved text.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ### 2. Data quality question
+-- MAGIC
+-- MAGIC **Question:**  
+-- MAGIC “What is your data quality strategy across Bronze, Silver, and Gold?”
+-- MAGIC
+-- MAGIC **Retrieval:**
+-- MAGIC - Filter `topic = 'data_quality'`
+-- MAGIC - Return `DQ_STRATEGY_001` chunks.
+-- MAGIC
+-- MAGIC **LLM Answer:**
+-- MAGIC - Describes completeness and fidelity in Landing/Bronze
+-- MAGIC - Type normalization and code cleaning in Enhanced Bronze / DV satellites
+-- MAGIC - Business rule checks in Silver
+-- MAGIC - Aggregate reconciliation in Gold.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ### 3. Data Vault lineage question
+-- MAGIC
+-- MAGIC **Question:**  
+-- MAGIC “How does Data Vault feed your FI fact tables?”
+-- MAGIC
+-- MAGIC **Retrieval:**
+-- MAGIC - Filter `topic = 'data_vault'`
+-- MAGIC - Return `DV_LINEAGE_001` chunks.
+-- MAGIC
+-- MAGIC **LLM Answer:**
+-- MAGIC - Explains hubs, link, and satellites
+-- MAGIC - Describes `bv_fi_posting`
+-- MAGIC - Connects `vw_fi_lineitem_bv` → `fi_fact_posting` → `fi_monthly_fact_usd`.
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ## Relationship to the SAP FI POC
+-- MAGIC
+-- MAGIC This RAG design sits *beside* the SAP FI data pipeline:
+-- MAGIC
+-- MAGIC - The data pipeline handles:
+-- MAGIC   - Ingestion (Landing/Bronze, conceptual for this POC)
+-- MAGIC   - Data Vault modelling of FI
+-- MAGIC   - Business Vault creation
+-- MAGIC   - Silver FI views (`vw_fi_lineitem_bv`)
+-- MAGIC   - Gold FI facts (`fi_fact_posting`, `fi_monthly_fact_usd`)
+-- MAGIC
+-- MAGIC - The RAG layer handles:
+-- MAGIC   - Explanations of *why* the pipeline is designed this way
+-- MAGIC   - Human-readable descriptions of DV, Delta, DQ, and SAP integration options
+-- MAGIC   - Providing grounded answers to architects, auditors, and interviewers.
+-- MAGIC
+-- MAGIC In interviews, this allows you to say:
+-- MAGIC
+-- MAGIC > “I didn’t just build a pipeline; I also built a documentation RAG that can
+-- MAGIC > explain the architecture, the Data Vault lineage, the data quality strategy,
+-- MAGIC > and the SAP integration patterns on demand.”
+-- MAGIC

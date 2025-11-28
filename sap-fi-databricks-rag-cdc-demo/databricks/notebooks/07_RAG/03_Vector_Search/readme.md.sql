@@ -1,0 +1,23 @@
+-- Databricks notebook source
+-- MAGIC %md
+-- MAGIC
+-- MAGIC ```md
+-- MAGIC # 03 – RAG Vector / Hybrid Search
+-- MAGIC
+-- MAGIC This module contains the search logic for retrieving documentation chunks
+-- MAGIC from the RAG corpus.
+-- MAGIC
+-- MAGIC ## Current (Free Databricks)
+-- MAGIC - Uses lexical search (`ILIKE`) for text matching
+-- MAGIC - Supports filtering by topic and subtopic
+-- MAGIC - Runs directly on `sap_ai.doc_rag_embeddings`
+-- MAGIC
+-- MAGIC ## Future (Full Environment)
+-- MAGIC - Embeddings populated in `embedding` column
+-- MAGIC - Vector similarity (cosine distance or Databricks Vector Search)
+-- MAGIC - Hybrid search = filters + vector ranking
+-- MAGIC - Used for grounding LLM responses about SAP → Databricks architecture
+-- MAGIC
+-- MAGIC ## Notebook
+-- MAGIC - `01_RAG_Hybrid_Search.py` — lexical search + vector pseudo-code
+-- MAGIC

@@ -1,0 +1,118 @@
+-- Databricks notebook source
+-- MAGIC %md
+-- MAGIC # SAP → Databricks Migration Strategy
+-- MAGIC
+-- MAGIC ## 1. Objectives
+-- MAGIC - Modernize SAP reporting and analytics using the Databricks Lakehouse.
+-- MAGIC - Reduce dependency on SAP BW without removing existing SAP business logic.
+-- MAGIC - Enable cross-domain analytics by combining SAP and non-SAP data.
+-- MAGIC - Provide a stable foundation for advanced analytics and AI use cases.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 2. Scope
+-- MAGIC This approach applies to SAP ECC or S/4HANA systems and selected SAP BW models.  
+-- MAGIC The sandbox represents a simplified but realistic version of the extraction, modeling, and reconciliation steps used in a real SAP migration.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 3. Target Architecture
+-- MAGIC
+-- MAGIC ### Ingestion (Bronze)
+-- MAGIC SAP data is replicated as raw Delta tables.
+-- MAGIC
+-- MAGIC In a real implementation this is typically done with:
+-- MAGIC - SAP SLT (CDC)
+-- MAGIC - SAP Data Services
+-- MAGIC - SAP extractors or file-based interfaces
+-- MAGIC
+-- MAGIC In this sandbox, Python is used to simulate incoming SAP data.
+-- MAGIC
+-- MAGIC Bronze tables remain structurally close to SAP for traceability and reconciliation.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ### Canonical Modeling (Data Vault)
+-- MAGIC A Data Vault layer is introduced between Bronze and Silver to act as a stable, canonical model.
+-- MAGIC
+-- MAGIC The Vault:
+-- MAGIC - Captures SAP business keys, relationships, and attributes
+-- MAGIC - Supports historization and auditability
+-- MAGIC - Is resilient to SAP structural changes
+-- MAGIC
+-- MAGIC Key elements:
+-- MAGIC - **Hubs** for core business keys (documents, accounts, company codes)
+-- MAGIC - **Links** for transactional relationships (FI posting lines)
+-- MAGIC - **Satellites** for descriptive attributes and measures
+-- MAGIC
+-- MAGIC This layer decouples raw SAP replication from downstream business models.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ### Business Logic (Silver)
+-- MAGIC Silver contains business-friendly views derived from the Data Vault.
+-- MAGIC
+-- MAGIC Logic applied in Silver includes:
+-- MAGIC - Reassembly of SAP document structures
+-- MAGIC - Company and account enrichment
+-- MAGIC - Currency normalization using TCURR
+-- MAGIC - Material master business views
+-- MAGIC
+-- MAGIC Silver models are designed for analysis, not schema preservation.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ### Consumption (Gold)
+-- MAGIC Gold contains analytics-ready models optimized for reporting tools.
+-- MAGIC
+-- MAGIC Examples include:
+-- MAGIC - Monthly FI fact in group currency
+-- MAGIC - Material and inventory reporting (future extension)
+-- MAGIC
+-- MAGIC Gold models are validated against SAP totals and business reports.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 4. Migration Phases
+-- MAGIC
+-- MAGIC ### Phase 1 — Assessment
+-- MAGIC - Identify SAP tables, BW objects, and reports in scope
+-- MAGIC - Capture business rules, hierarchies, and dependencies
+-- MAGIC
+-- MAGIC ### Phase 2 — Foundations
+-- MAGIC - Configure Unity Catalog and medallion structure
+-- MAGIC - Load SAP data into Bronze
+-- MAGIC - Perform initial reconciliation and validation
+-- MAGIC
+-- MAGIC ### Phase 3 — Canonical Modeling
+-- MAGIC - Load Data Vault hubs, links, and satellites
+-- MAGIC - Preserve keys, relationships, and historical change
+-- MAGIC - Establish a stable integration layer
+-- MAGIC
+-- MAGIC ### Phase 4 — Business Modeling
+-- MAGIC - Build Silver views from the Data Vault
+-- MAGIC - Apply SAP business logic in consumable form
+-- MAGIC - Add currency conversion and master data enrichment
+-- MAGIC
+-- MAGIC ### Phase 5 — Analytics Layer
+-- MAGIC - Build Gold facts and dimensions
+-- MAGIC - Validate with business stakeholders
+-- MAGIC - Reconcile results to SAP and BW reports
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 5. Governance
+-- MAGIC - Unity Catalog manages access to FI and MM data
+-- MAGIC - Schema, table, and column-level controls applied as needed
+-- MAGIC - Lineage tracked across Bronze, Vault, Silver, and Gold layers
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 6. Reconciliation
+-- MAGIC Key validation steps include:
+-- MAGIC - Row count and key reconciliation between SAP and Bronze
+-- MAGIC - Aggregation checks between Silver/Gold and SAP reports
+-- MAGIC - Document-level drill-down from Gold back to Vault and Bronze
+-- MAGIC
+-- MAGIC This ensures confidence in both accuracy and traceability.
+-- MAGIC

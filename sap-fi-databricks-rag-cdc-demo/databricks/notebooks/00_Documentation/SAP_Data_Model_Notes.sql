@@ -1,0 +1,184 @@
+-- Databricks notebook source
+-- MAGIC %python
+-- MAGIC from IPython.display import Image, display
+-- MAGIC
+-- MAGIC display(Image("/Volumes/lending_catalog/sap_bronze/sap_bronze_vol/SAP_DataBricks_ArchDiagram.png",  width=2000)) 
+-- MAGIC
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC # SAP Data Model Notes
+-- MAGIC
+-- MAGIC ## 1. Scope of the Sandbox
+-- MAGIC
+-- MAGIC This SAP sandbox in Databricks is designed to mimic key FI and MM data structures and common enterprise modeling patterns.
+-- MAGIC
+-- MAGIC It covers three layers of modeling:
+-- MAGIC - SAP-style replication (Bronze)
+-- MAGIC - Canonical modeling using Data Vault (Vault)
+-- MAGIC - Business-facing models (Silver / Gold)
+-- MAGIC
+-- MAGIC ### Domains in Scope
+-- MAGIC
+-- MAGIC - **FI (Finance)**
+-- MAGIC   - BKPF – FI document header
+-- MAGIC   - BSEG – FI line items
+-- MAGIC   - T001 – Company code master
+-- MAGIC   - TCURR – Currency rates
+-- MAGIC   - SKA1 – G/L master
+-- MAGIC
+-- MAGIC - **MM (Materials)**
+-- MAGIC   - MARA – Material master (general)
+-- MAGIC
+-- MAGIC All tables live in the **lending_catalog** under:
+-- MAGIC
+-- MAGIC - Raw SAP replication: `sap_bronze`
+-- MAGIC - Canonical Data Vault: `sap_vault`
+-- MAGIC - Business logic: `sap_silver`
+-- MAGIC - Business-ready analytics: `sap_gold`
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 2. Architecture Layers
+-- MAGIC
+-- MAGIC ### Bronze (`sap_bronze`)
+-- MAGIC - Direct, SAP-like Delta tables
+-- MAGIC - Minimal transformation
+-- MAGIC - Used for traceability, auditing, and reconciliation to SAP
+-- MAGIC
+-- MAGIC ### Vault (`sap_vault`)
+-- MAGIC - Canonical, historized model using **Data Vault 2.0**
+-- MAGIC - Separates:
+-- MAGIC   - business keys (Hubs)
+-- MAGIC   - relationships (Links)
+-- MAGIC   - descriptive and measure attributes (Satellites)
+-- MAGIC - Designed to absorb SAP structural change without breaking downstream models
+-- MAGIC
+-- MAGIC ### Silver (`sap_silver`)
+-- MAGIC - Business-friendly views derived from the Vault
+-- MAGIC - SAP logic reapplied in a consumable form:
+-- MAGIC   - document structure
+-- MAGIC   - currency normalization
+-- MAGIC   - master data enrichment
+-- MAGIC
+-- MAGIC ### Gold (`sap_gold`)
+-- MAGIC - Aggregated fact and dimension-style models
+-- MAGIC - Optimized for BI and analytics
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 3. Data Vault Model (FI)
+-- MAGIC
+-- MAGIC ### 3.1 Hubs (Business Keys)
+-- MAGIC
+-- MAGIC - **HUB_FI_DOCUMENT**
+-- MAGIC   - Business key: `(BELNR, BUKRS, GJAHR)`
+-- MAGIC - **HUB_GL_ACCOUNT**
+-- MAGIC   - Business key: `SAKNR`
+-- MAGIC - **HUB_COMPANY_CODE**
+-- MAGIC   - Business key: `BUKRS`
+-- MAGIC
+-- MAGIC Each hub contains one row per unique business key and includes standard DV metadata (`load_dts`, `record_source`).
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ### 3.2 Links (Relationships)
+-- MAGIC
+-- MAGIC - **LINK_FI_POSTING**
+-- MAGIC   - Grain: one FI posting line
+-- MAGIC   - Connects:
+-- MAGIC     - FI document
+-- MAGIC     - G/L account
+-- MAGIC     - Company code
+-- MAGIC   - Driven by BSEG and includes the posting line number (`BUZEI`)
+-- MAGIC
+-- MAGIC The Link defines the transactional grain and relationship structure.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ### 3.3 Satellites (Attributes & Measures)
+-- MAGIC
+-- MAGIC - **SAT_FI_DOCUMENT**
+-- MAGIC   - Document date, document currency
+-- MAGIC - **SAT_COMPANY_CODE**
+-- MAGIC   - Company name, local currency, country
+-- MAGIC - **SAT_GL_ACCOUNT**
+-- MAGIC   - G/L description, account group
+-- MAGIC - **SAT_FI_POSTING**
+-- MAGIC   - Posting-level measures (amount in document currency)
+-- MAGIC
+-- MAGIC Satellites hang off their parent Hub or Link and do not introduce new keys.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 4. Silver Layer Models
+-- MAGIC
+-- MAGIC ### 4.1 Silver FI Line Item (from Vault)
+-- MAGIC
+-- MAGIC `sap_silver.vw_fi_lineitem_from_vault`
+-- MAGIC
+-- MAGIC Logic:
+-- MAGIC - Join:
+-- MAGIC   - hubs + satellites for document, company, and account
+-- MAGIC   - posting link + posting satellite
+-- MAGIC - Result:
+-- MAGIC   - one row per FI posting line
+-- MAGIC   - equivalent in shape to a classic SAP FI line item view
+-- MAGIC   - decoupled from raw SAP table structures
+-- MAGIC
+-- MAGIC This replaces direct Bronze-based joins for production-style modeling.
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ### 4.2 Currency Conversion & Enrichment
+-- MAGIC
+-- MAGIC - Currency conversion applied in Silver using **TCURR**
+-- MAGIC - GL descriptions and company attributes already sourced from Vault satellites
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 5. Gold Layer Models
+-- MAGIC
+-- MAGIC ### 5.1 FI Monthly Fact
+-- MAGIC
+-- MAGIC `sap_gold.fact_fi_monthly_grp_usd`
+-- MAGIC
+-- MAGIC - Aggregated from Silver FI line items
+-- MAGIC - Grouped by:
+-- MAGIC   - company
+-- MAGIC   - G/L account
+-- MAGIC   - month
+-- MAGIC - Measures:
+-- MAGIC   - total amount in group currency (USD)
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 6. Materials (MM) Domain
+-- MAGIC
+-- MAGIC ### 6.1 MARA (Bronze)
+-- MAGIC
+-- MAGIC - `MATNR` – material number
+-- MAGIC - `MTART` – material type
+-- MAGIC - `MATKL` – material group
+-- MAGIC - `MEINS` – base unit of measure
+-- MAGIC - `MAKTX` – description
+-- MAGIC
+-- MAGIC ### 6.2 Planned Extensions
+-- MAGIC
+-- MAGIC - Vault hubs for Materials and Plants
+-- MAGIC - Silver material and inventory views
+-- MAGIC - Gold inventory and material performance facts
+-- MAGIC
+-- MAGIC ---
+-- MAGIC
+-- MAGIC ## 7. Reconciliation & Extension Notes
+-- MAGIC
+-- MAGIC - Silver and Gold FI numbers reconcile to BSEG totals by document, account, and company
+-- MAGIC - Vault provides a stable audit layer between SAP replication and reporting
+-- MAGIC - Architecture naturally extends to:
+-- MAGIC   - ACDOCA-style unified journal
+-- MAGIC   - CO (cost centers / profit centers)
+-- MAGIC   - SD and MM transactional domains
+-- MAGIC

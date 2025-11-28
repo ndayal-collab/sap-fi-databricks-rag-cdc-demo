@@ -1,0 +1,26 @@
+-- Databricks notebook source
+-- MAGIC %md
+-- MAGIC # 11_DV_to_Star_Lineage — Data Vault 2.0 → Silver → Gold (SAP FI Lineage)
+-- MAGIC
+-- MAGIC **Purpose:**  
+-- MAGIC Explain how SAP FI data flows through the Data Vault model (Hubs, Links, Satellites), then into Business Vault, Silver, and Gold star schemas.  
+-- MAGIC This is required knowledge for Databricks, Fabric, and SAP-to-lakehouse architecture interviews.
+-- MAGIC
+-- MAGIC **Entities Demonstrated:**
+-- MAGIC - Hub: `hub_fi_document`, `hub_gl_account`, `hub_company_code`
+-- MAGIC - Link: `link_fi_posting`
+-- MAGIC - Satellites: `sat_fi_document`, `sat_fi_posting`, `sat_gl_account`, `sat_company_code`
+-- MAGIC - Business Vault: `bv_fi_posting`
+-- MAGIC - Silver: `vw_fi_lineitem_bv`
+-- MAGIC - Gold: `fi_fact_posting`, `fi_monthly_fact_usd`
+-- MAGIC
+-- MAGIC **Outcome:**  
+-- MAGIC A clear end-to-end lineage describing how SAP FI/CO raw tables (BKPF/BSEG) become clean, governed, analytical fact tables ready for reporting and ML.
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC End-to-end flow of SAP FI posting data from Data Vault (DV) structures, through Silver views, to Gold fact tables for analytics and reporting.
+-- MAGIC
+-- MAGIC
