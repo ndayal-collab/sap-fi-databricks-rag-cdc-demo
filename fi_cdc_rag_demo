@@ -1,0 +1,6 @@
+# FI CDC + RAG Demo
+
+This folder contains the Streamlit app that demonstrates:
+
+- SAP FI CDC emulation with Databricks (events → Bronze CDC)
+- Architecture RAG over doc_rag_corpus in Unity Catalog
