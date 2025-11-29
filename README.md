@@ -1,219 +1,214 @@
-# SAP FI Databricks Lakehouse Architecture
-Medallion Architecture • Data Vault • Delta CDC • Documentation Retrieval
+SAP FI Databricks Lakehouse Architecture
 
-This repository contains a structured implementation of an SAP FI financial data pipeline on the Databricks Lakehouse platform. It includes ingestion patterns, CDC processing, Data Vault modeling, analytic tables, and an optional Streamlit interface for exploring CDC behavior and searching architecture documentation.
+Medallion Architecture • Delta CDC • Data Vault • Documentation Retrieval
 
----------------------------------------------------------------------
+This repository implements an SAP FI financial data pipeline on the Databricks Lakehouse platform. It includes ingestion patterns, CDC processing, Data Vault modeling, analytic outputs, and an optional Streamlit UI for exploring CDC behavior and retrieving architecture documentation.
 
-# 1. Objectives
+1. Objectives
 
-The solution provides a modular approach for:
+This solution provides a modular approach for:
 
-- Ingesting SAP FI financial documents and line items
-- Capturing and processing CDC (Insert/Update/Delete) changes
-- Modeling enterprise data using Data Vault 2.0
-- Producing analytic-ready fact tables
-- Storing architecture documentation as a searchable corpus
-- Providing an interactive UI for CDC inspection and architecture Q&A
+Ingesting SAP FI financial documents and line items
 
-The design follows Databricks Lakehouse best practices and SAP financial data structures.
+Capturing and processing CDC (Insert/Update/Delete) changes
 
----------------------------------------------------------------------
+Modeling enterprise data using Data Vault 2.0
 
-# 2. Repository Structure
+Building Business Vault and Gold analytical datasets
+
+Storing architecture documentation as a searchable corpus
+
+Providing an interactive UI for CDC inspection and document retrieval
+
+2. Repository Structure
 
 sap-fi-databricks-rag-cdc-demo/
 │
 ├── databricks/
-│   ├── notebooks/        # SQL + Python notebooks for ingestion, CDC, DV, BV, Gold
-│   ├── jobs/             # optional job definitions or scripts
+│ ├── notebooks/ – Ingestion, CDC, Data Vault, Business Vault, Gold
+│ ├── jobs/ – Optional job definitions
 │
 ├── docs/
-│   ├── Architecture.md
-│   ├── CDC_Explorer_Design.md
-│   ├── RAG_Corpus_Design.md
-│   ├── Streamlit_App_Overview.md
+│ ├── Architecture.md
+│ ├── CDC_Explorer_Design.md
+│ ├── RAG_Corpus_Design.md
+│ ├── Streamlit_App_Overview.md
 │
 ├── streamlit_app/
-│   ├── app.py
-│   ├── .env              # Databricks credentials (not committed)
-│   ├── requirements.txt
-│   └── README.md
+│ ├── streamlit_app.py
+│ ├── .env – Databricks credentials (ignored by Git)
+│ ├── requirements.txt
+│ └── README.md – Instructions for running the Streamlit app
 │
-└── README.md
+└── README.md – This file
 
----------------------------------------------------------------------
+3. Data Layers
+Bronze Layer
 
-# 3. Data Layers
+sap_raw — Raw CDC Events
+Stores full SAP FI change history:
 
-## Bronze Layer (Raw + Enhanced)
+Insert / Update / Delete events
 
-### sap_raw (Raw Events)
-Stores full CDC history:
-- Insert / Update / Delete events
-- Event timestamps
-- SAP FI fields (amounts, currencies, accounts)
-- Business keys (belnr, bukrs, gjahr, buzei)
+SAP FI fields (currencies, accounts, amounts)
 
-Equivalent to an SAP ODP/SLT change queue.
+Business keys (belnr, bukrs, gjahr, buzei)
 
-### sap_bronze (Current State)
+Event timestamps
+Equivalent to an SLT/ODP change queue.
+
+sap_bronze — Current-State Tables
 Maintained via Delta MERGE:
-- Latest image per key
-- Hard deletes applied
-- Tracks last operation
 
----------------------------------------------------------------------
+Latest image per business key
 
-# 4. Silver Layer – Data Vault
+Delete operations applied
 
-## Hubs  
-Represent business keys.
-- hub_fi_document  
-- hub_gl_account  
-- hub_company  
+Tracks last operation and last event timestamp
 
-## Links  
-Associations.
-- link_fi_posting  
+4. Silver Layer — Data Vault
 
-## Satellites  
-Historical descriptive attributes.
-- sat_fi_document_header  
-- sat_fi_lineitem_amounts  
-- sat_gl_master_data  
-- sat_company_attributes  
+Hubs:
 
-Characteristics:
-- Hash keys / hash diffs
-- Full historization
-- Effective_from / effective_to
+hub_fi_document
 
----------------------------------------------------------------------
+hub_gl_account
 
-# 5. Business Vault
+hub_company
 
-Business Vault enriches the DV layer by:
-- Joining hubs, links, satellites
-- Adding derived fields
-- Applying business rules
-- Performing currency conversions
-- Preparing analytics-friendly outputs
+Links:
 
----------------------------------------------------------------------
+link_fi_posting
 
-# 6. Gold Layer – Analytics
+Satellites:
 
-Gold tables provide analytic fact structures:
-- fi_fact_posting (atomic)
-- fi_monthly_fact_usd (aggregated)
+sat_fi_document_header
+
+sat_fi_lineitem_amounts
+
+sat_gl_master_data
+
+sat_company_attributes
+
+Features:
+
+Hash keys and hash diffs
+
+Effective_from / effective_to
+
+Full historization
+
+5. Business Vault
+
+Business Vault enriches the Data Vault by:
+
+Applying business rules
+
+Combining hubs/links/satellites
+
+Adding derived fields
+
+Currency conversions
+
+Producing analytics-friendly structures
+
+6. Gold Layer
+
+Gold tables support analytics and reporting:
+
+fi_fact_posting (atomic fact)
+
+fi_monthly_fact_usd (monthly aggregated fact)
 
 Used for:
-- reporting
-- analytics
-- financial reconciliation
-- API output models
 
----------------------------------------------------------------------
+Financial analytics
 
-# 7. Architecture Documentation Corpus (RAG)
+Reconciliation
 
-A searchable corpus is stored in:
+BI dashboards
+
+ML feature generation
+
+7. Architecture Documentation Corpus (RAG)
+
+Documentation corpus stored in:
 
 lending_catalog.sap_ai.doc_rag_corpus
 
-Columns:
-- doc_id
-- topic
-- subtopic
-- text
-- optional metadata fields
+lending_catalog.sap_ai.doc_rag_embeddings
 
-The Streamlit application:
-- Loads live corpus when Databricks credentials are available
-- Falls back to local corpus when offline
+Fields include:
 
-Retrieval uses keyword-overlap scoring.
+doc_id
 
----------------------------------------------------------------------
+topic
 
-# 8. Streamlit Application
+subtopic
+
+text
+
+metadata fields
+
+Streamlit application:
+
+Loads corpus from Databricks when credentials are valid
+
+Falls back to a small in-memory corpus otherwise
+
+Retrieval is keyword-based (no LLM yet)
+
+8. Streamlit Application
 
 Located in streamlit_app/.
 
 Modules:
 
-## CDC Explorer
-- Displays event history
-- Computes current-state CDC rows
-- Shows operation timelines
-- Simulates SLT/ODP behavior
+CDC Explorer:
 
-Reflects patterns of:
-- sap_raw.fi_lineitem_events
-- sap_bronze.fi_lineitem_cdc
+Displays CDC event history
 
-## Architecture Q&A
-- Accepts a user question
-- Retrieves relevant architecture chunks
-- Returns concatenated context
+Computes current-state rows
 
-Works in:
-- Online mode (Databricks corpus)
-- Offline mode (local corpus)
+Mirrors SLT/ODP behavior
+Backed by sap_raw.fi_lineitem_events and sap_bronze.fi_lineitem_cdc.
 
----------------------------------------------------------------------
+Architecture Q&A (RAG):
 
-# 9. Running the Streamlit App
+Accepts a question
 
-1. Create a virtual environment
+Retrieves relevant architecture text chunks
 
-   python -m venv .venv
-   .venv\Scripts\activate    (Windows)
-   source .venv/bin/activate (Mac/Linux)
+Works with Databricks or fallback corpus
 
-2. Install dependencies
+No LLM generation implemented
 
-   pip install -r streamlit_app/requirements.txt
+Instructions for running the Streamlit app are in streamlit_app/README.md.
 
-3. Create `.env` inside streamlit_app/
+9. Delta Lake Features Used
 
-   DATABRICKS_HOST=dbc-xxxx.cloud.databricks.com
-   DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/xxxx
-   DATABRICKS_TOKEN=your_token
+MERGE INTO for CDC upserts
 
-4. Launch the app
+VERSION AS OF for time travel
 
-   streamlit run streamlit_app/app.py
+DESCRIBE HISTORY for lineage
 
----------------------------------------------------------------------
+Checkpoints and JSON logs
 
-# 10. Delta Lake Features Used
+Partitioning and clustering considerations
 
-- MERGE INTO for CDC state
-- DESCRIBE HISTORY for commit lineage
-- VERSION AS OF for snapshots
-- Partitioning considerations
-- JSON log + checkpoint structure
+10. Extensibility
 
-These features enable reliable processing of SAP financial changes.
+Possible extensions:
 
----------------------------------------------------------------------
+Auto Loader ingestion
 
-# 11. Extensibility
+SLT/ODP direct connectors
 
-The architecture can be extended with:
+Additional SAP modules (MM, SD, CO)
 
-- SAP SLT or ODP direct connections
-- AutoLoader ingestion pipelines
-- Expanded SAP module support
-- Embedding-powered RAG
-- Delta live pipelines or workflows
-- Dashboarding or BI integrations
+Embedding-based RAG with vector search
 
----------------------------------------------------------------------
+Delta Live Tables or workflow automation
 
-# 12. License
-
-This repository does not include license restrictions. Add a LICENSE file if required.
-
+BI integrations (Power BI, dashboards)
